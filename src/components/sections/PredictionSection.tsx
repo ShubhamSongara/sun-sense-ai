@@ -7,6 +7,7 @@ import { HeroButton } from "@/components/ui/hero-button";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Sun, Zap, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import ApiConfigSection from "./ApiConfigSection";
 
 interface PredictionData {
   temperature: string;
@@ -78,22 +79,57 @@ const PredictionSection = () => {
     setIsLoading(true);
     
     try {
-      // Simulate API call to ML model
-      // In real implementation, this would call your Python Flask/FastAPI backend
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Prepare data for your API
+      const apiData = {
+        temperature: parseFloat(formData.temperature),
+        humidity: parseFloat(formData.humidity),
+        wind_speed: parseFloat(formData.windSpeed),
+        precipitation: parseFloat(formData.precipitation),
+        pressure: parseFloat(formData.pressure),
+        month: parseInt(formData.month),
+        day_of_year: parseInt(formData.dayOfYear),
+        weekday: parseInt(formData.weekday)
+      };
+
+      // Replace with your actual API endpoint
+      const apiEndpoint = localStorage.getItem('solar-api-endpoint');
+      const apiKey = localStorage.getItem('solar-api-key');
       
-      // Mock prediction calculation based on inputs
-      const temp = parseFloat(formData.temperature);
-      const humidity = parseFloat(formData.humidity);
-      const wind = parseFloat(formData.windSpeed);
-      const precip = parseFloat(formData.precipitation);
+      if (!apiEndpoint) {
+        throw new Error("API endpoint not configured. Please configure your API settings first.");
+      }
       
-      // Simplified prediction logic (replace with actual ML model call)
-      const basePrediction = 15 + (temp * 0.3) - (humidity * 0.1) + (wind * 0.2) - (precip * 2);
-      const seasonalFactor = parseInt(formData.month) <= 6 ? 1.2 : 0.8;
-      const mockPrediction = Math.max(0, basePrediction * seasonalFactor);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
       
-      setPrediction(parseFloat(mockPrediction.toFixed(2)));
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        // Alternative header formats - uncomment if your API uses different auth:
+        // headers['X-API-Key'] = apiKey;
+        // headers['Api-Key'] = apiKey;
+      }
+      
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(apiData)
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      // Adjust based on your API response structure
+      const predictedValue = result.prediction || result.solar_radiation || result.value;
+      
+      if (predictedValue === undefined || predictedValue === null) {
+        throw new Error("Invalid response from prediction API");
+      }
+
+      setPrediction(parseFloat(predictedValue.toFixed(2)));
       
       toast({
         title: "Prediction Complete!",
@@ -101,9 +137,10 @@ const PredictionSection = () => {
       });
       
     } catch (error) {
+      console.error("Prediction API Error:", error);
       toast({
         title: "Prediction Failed",
-        description: "Unable to generate prediction. Please try again later.",
+        description: error instanceof Error ? error.message : "Unable to generate prediction. Please try again later.",
         variant: "destructive"
       });
     } finally {
@@ -120,7 +157,9 @@ const PredictionSection = () => {
 
   return (
     <section id="prediction" ref={sectionRef} className="py-20 px-6 bg-gradient-to-br from-background to-muted/50">
-      <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto">
+        <ApiConfigSection />
+        
         <div className={`text-center mb-12 transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <h2 className="text-5xl font-bold mb-6 bg-gradient-solar bg-clip-text text-transparent">
             Solar Energy Predictor
